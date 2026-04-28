@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  user
+  admin
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  name      String
+  role      UserRole   @default(user)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  cartItems CartItem[]
+
+  @@map("users")
+}
+
+model MenuItem {
+  id        String     @id @default(uuid())
+  name      String
+  recipe    String
+  image     String
+  category  String
+  price     Decimal    @db.Decimal(10, 2)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  cartItems CartItem[]
+
+  @@index([category])
+  @@map("menu_items")
+}
+
+model CartItem {
+  id         String    @id @default(uuid())
+  foodId     String    @map("food_id")
+  email      String
+  name       String
+  image      String
+  price      Decimal   @db.Decimal(10, 2)
+  userId     String    @map("user_id")
+  menuItemId String?   @map("menu_item_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([userId])
+  @@map("cart_items")
+}
