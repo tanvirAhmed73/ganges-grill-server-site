@@ -9,6 +9,8 @@ import apiConfig from './config/api.config';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CartModule } from './modules/cart/cart.module';
+import { DiscoveryModule } from './modules/discovery/discovery.module';
+import { RestaurantOwnerModule } from './modules/restaurant-owner/restaurant-owner.module';
 import { MenuModule } from './modules/menu/menu.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -54,6 +56,8 @@ import { PrismaModule } from './prisma/prisma.module';
     MenuModule,
     CartModule,
     AdminModule,
+    DiscoveryModule,
+    RestaurantOwnerModule,
   ],
   providers: [
     {
