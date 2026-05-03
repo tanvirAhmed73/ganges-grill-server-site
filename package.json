@@ -10,6 +10,7 @@
     "start:prod": "node dist/main.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "test": "echo \"Add tests in migration phase\" && exit 0"
   },
   "keywords": [],
