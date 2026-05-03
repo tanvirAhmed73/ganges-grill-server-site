@@ -11,6 +11,7 @@ datasource db {
 enum UserRole {
   user
   admin
+  restaurant_owner
 }
 
 model User {
@@ -31,10 +32,34 @@ model User {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  cartItems     CartItem[]
-  refreshTokens RefreshToken[]
+  cartItems        CartItem[]
+  refreshTokens    RefreshToken[]
+  /// Marketplace: at most one owned restaurant (see `Restaurant.ownerId` unique).
+  ownedRestaurant  Restaurant? @relation("RestaurantOwner")
+  ordersAsCustomer Order[]     @relation("OrderCustomer")
 
   @@map("users")
+}
+
+/// Listing / ops state for vendor restaurants (seeded catalog rows use `active`).
+enum RestaurantBusinessStatus {
+  draft
+  pending_review
+  active
+  suspended
+}
+
+/// Customer order lifecycle (checkout will be added by a separate flow).
+enum OrderStatus {
+  pending_acceptance
+  accepted
+  preparing
+  ready_for_pickup
+  out_for_delivery
+  delivered
+  cancelled_by_customer
+  cancelled_by_restaurant
+  rejected
 }
 
 model RefreshToken {
@@ -84,4 +109,167 @@ model CartItem {
   @@index([email])
   @@index([userId])
   @@map("cart_items")
+}
+
+/// Homepage cuisine tiles (was static `cuisines` + `cuisineMap.filterTags`).
+model Cuisine {
+  id          String @id @default(uuid())
+  name        String @unique
+  image       String
+  sortOrder   Int    @default(0) @map("sort_order")
+  /// Lowercase tags used to match menu items / filters, e.g. ["pizza"].
+  filterTags  Json   @map("filter_tags")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("cuisines")
+}
+
+/// Promo banners (was static `dailyDeals` + `dealMap.filterTags`).
+model DailyDeal {
+  id         String @id @default(uuid())
+  title      String @unique
+  subtitle   String
+  image      String
+  bgClass    String @map("bg_class")
+  sortOrder  Int    @default(0) @map("sort_order")
+  filterTags Json   @map("filter_tags")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("daily_deals")
+}
+
+/// Restaurant card in discovery + optional vendor profile (Foodpanda-style).
+model Restaurant {
+  id     String  @id @default(uuid())
+  /// Vendor account; null for seeded/marketing-only rows.
+  ownerId String? @unique @map("owner_id")
+  owner   User?   @relation("RestaurantOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  slug        String? @unique
+  name        String
+  description String  @default("")
+  phone       String?
+  addressLine1 String? @map("address_line1")
+  city        String?
+  postalCode  String? @map("postal_code")
+
+  /// Display category (e.g. "Biryani, Rice") and listing metadata.
+  category String
+  eta      String
+  rating   Decimal @db.Decimal(2, 1)
+  image    String
+
+  status RestaurantBusinessStatus @default(draft)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  placements RestaurantPlacement[]
+  products   RestaurantProduct[]
+  orders     Order[]
+
+  @@index([name])
+  @@map("restaurants")
+}
+
+/// Menu item sold by a specific restaurant (replaces ad-hoc global menu for vendors).
+model RestaurantProduct {
+  id           String     @id @default(uuid())
+  restaurantId String     @map("restaurant_id")
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String  @default("")
+  image       String
+  category    String
+  price       Decimal @db.Decimal(10, 2)
+  isAvailable Boolean @default(true) @map("is_available")
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  orderItems OrderItem[]
+
+  @@index([restaurantId])
+  @@map("restaurant_products")
+}
+
+/// Order placed by a customer (`User`) at one restaurant; lines snapshot product names/prices.
+model Order {
+  id             String            @id @default(uuid())
+  orderNumber    String            @unique @map("order_number")
+  customerId     String            @map("customer_id")
+  customer       User              @relation("OrderCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  restaurantId   String            @map("restaurant_id")
+  restaurant     Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  status         OrderStatus       @default(pending_acceptance)
+
+  subtotal    Decimal @db.Decimal(10, 2)
+  deliveryFee Decimal @default(0) @map("delivery_fee") @db.Decimal(10, 2)
+  tax         Decimal @default(0) @db.Decimal(10, 2)
+  total       Decimal @db.Decimal(10, 2)
+
+  deliveryAddressLine1 String? @map("delivery_address_line1")
+  deliveryCity         String? @map("delivery_city")
+  deliveryPhone        String? @map("delivery_phone")
+  customerNotes        String? @map("customer_notes")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items OrderItem[]
+
+  @@index([customerId])
+  @@index([restaurantId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id       String @id @default(uuid())
+  orderId  String @map("order_id")
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String            @map("product_id")
+  product   RestaurantProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  productName String  @map("product_name")
+  unitPrice   Decimal @map("unit_price") @db.Decimal(10, 2)
+  quantity    Int
+  lineTotal   Decimal @map("line_total") @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+enum RestaurantSection {
+  featured
+  deal_nao
+  fast_delivery
+}
+
+model RestaurantPlacement {
+  id           String            @id @default(uuid())
+  restaurantId String            @map("restaurant_id")
+  section      RestaurantSection
+  sortOrder    Int               @default(0) @map("sort_order")
+  restaurant   Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, section])
+  @@index([section, sortOrder])
+  @@map("restaurant_placements")
+}
+
+model TopBrand {
+  id         String @id @default(uuid())
+  name       String @unique
+  colorClass String @map("color_class")
+  sortOrder  Int    @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("top_brands")
 }

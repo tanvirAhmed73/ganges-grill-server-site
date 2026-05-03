@@ -22,6 +22,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RegisterRestaurantOwnerDto } from './dto/register-restaurant-owner.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -40,6 +41,26 @@ export class AuthController {
   @ApiResponse({ status: 201 })
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto.email, dto.name, dto.password);
+  }
+
+  @Post('register-restaurant-owner')
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 8, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Create a vendor account (role restaurant_owner) and a linked restaurant row; same email OTP flow as register.',
+  })
+  async registerRestaurantOwner(@Body() dto: RegisterRestaurantOwnerDto) {
+    return this.authService.registerRestaurantOwner(
+      dto.email,
+      dto.name,
+      dto.password,
+      dto.restaurantName,
+      {
+        primaryCategory: dto.primaryCategory,
+        phone: dto.phone,
+      },
+    );
   }
 
   @Post('verify-email')

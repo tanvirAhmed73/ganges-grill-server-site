@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { PrismaClient } from '@prisma/client';
 import { User, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomInt } from 'crypto';
@@ -15,8 +16,13 @@ import {
   verifyEmailOtp,
 } from './crypto/tokens';
 import { JwtAccessPayload } from './interfaces/jwt-access-payload.interface';
+import { slugifyRestaurantName, uniqueRestaurantSlug } from '../../common/utils/restaurant-slug';
 
 const OTP_TTL_MS = 15 * 60 * 1000;
+
+/** Placeholder hero image until the owner uploads branding (required NOT NULL column). */
+const DEFAULT_VENDOR_RESTAURANT_IMAGE =
+  'https://images.unsplash.com/photo-1555396273-367ea4eb4db1?auto=format&fit=crop&w=1200&q=80';
 
 export type TokenPair = {
   accessToken: string;
@@ -99,6 +105,78 @@ export class AuthService {
     return {
       message:
         'Registration successful. Check your email for a verification code to activate your account.',
+      user: this.toPublicUser(user),
+    };
+  }
+
+  /** Registers a marketplace vendor: `restaurant_owner` user + one linked `Restaurant` row. */
+  async registerRestaurantOwner(
+    email: string,
+    ownerDisplayName: string,
+    password: string,
+    restaurantName: string,
+    options?: { primaryCategory?: string; phone?: string },
+  ): Promise<{ message: string; user: UserPublic }> {
+    const normalized = email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({
+      where: { email: normalized },
+    });
+    if (existing) {
+      throw new AppHttpException(
+        HttpStatus.CONFLICT,
+        AuthErrorCode.EMAIL_ALREADY_REGISTERED,
+        'An account with this email already exists.',
+      );
+    }
+
+    const passwordHash = await argon2.hash(password);
+    const code = this.generateOtpDigits();
+    const codeHash = hashEmailOtp(normalized, code, this.requirePepper());
+
+    const category = options?.primaryCategory?.trim() || 'Restaurant';
+    const phone = options?.phone?.trim() || null;
+
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: normalized,
+          name: ownerDisplayName.trim(),
+          role: 'restaurant_owner' as UserRole,
+          passwordHash,
+          emailVerifiedAt: null,
+          verificationCodeHash: codeHash,
+          verificationExpiresAt: new Date(Date.now() + OTP_TTL_MS),
+        },
+      });
+
+      const baseSlug = slugifyRestaurantName(restaurantName);
+      const slug = await uniqueRestaurantSlug(tx as unknown as PrismaClient, baseSlug);
+
+      await tx.restaurant.create({
+        data: {
+          ownerId: user.id,
+          name: restaurantName.trim(),
+          slug,
+          description: '',
+          phone,
+          category,
+          eta: '30 min',
+          rating: 0,
+          image: DEFAULT_VENDOR_RESTAURANT_IMAGE,
+          status: 'pending_review',
+        },
+      });
+    });
+
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { email: normalized },
+    });
+
+    await this.enqueueVerificationMail(user.email, user.name, code);
+
+    return {
+      message:
+        'Restaurant account created. Check your email for a verification code to activate your account.',
       user: this.toPublicUser(user),
     };
   }
