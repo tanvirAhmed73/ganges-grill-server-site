@@ -1,15 +1,25 @@
-import { ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, HttpStatus, Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { AppHttpException } from '../../common/exceptions/app-http.exception';
+import { AuthErrorCode } from './constants/error-codes';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  canActivate(context: ExecutionContext) {
+  override canActivate(context: ExecutionContext) {
     return super.canActivate(context);
   }
 
-  handleRequest<TUser = unknown>(err: unknown, user: TUser): TUser {
+  override handleRequest<TUser>(
+    err: Error | undefined,
+    user: TUser | false,
+    info: Error | undefined,
+  ): TUser {
     if (err || !user) {
-      throw new UnauthorizedException({ message: 'forbidden access' });
+      throw new AppHttpException(
+        HttpStatus.UNAUTHORIZED,
+        AuthErrorCode.INVALID_CREDENTIALS,
+        info?.message ?? err?.message ?? 'Invalid or missing access token.',
+      );
     }
     return user;
   }

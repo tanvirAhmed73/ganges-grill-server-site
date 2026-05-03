@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CartItem } from '@prisma/client';
+import { JwtAccessPayload } from '../auth/interfaces/jwt-access-payload.interface';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCartItemDto } from './dto/create-cart-item.dto';
 
@@ -30,17 +31,12 @@ export class CartService {
     return items.map((item) => this.toApiResponse(item));
   }
 
-  async create(data: CreateCartItemDto): Promise<CartApiResponse> {
-    let user = await this.prisma.user.findUnique({
-      where: { email: data.email },
+  async create(data: CreateCartItemDto, actor: JwtAccessPayload): Promise<CartApiResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: actor.sub },
     });
     if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          email: data.email,
-          name: data.email.split('@')[0] ?? 'user',
-        },
-      });
+      throw new NotFoundException({ message: 'User not found' });
     }
 
     const menuItem = await this.prisma.menuItem.findUnique({
@@ -49,7 +45,11 @@ export class CartService {
 
     const item = await this.prisma.cartItem.create({
       data: {
-        ...data,
+        foodId: data.foodId,
+        email: user.email,
+        name: user.name,
+        image: data.image,
+        price: data.price,
         userId: user.id,
         menuItemId: menuItem?.id ?? null,
       },

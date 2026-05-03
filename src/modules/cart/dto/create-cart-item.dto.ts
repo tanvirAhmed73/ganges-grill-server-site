@@ -1,13 +1,16 @@
-import { IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateCartItemDto {
   @IsString()
   @IsNotEmpty()
   foodId!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  email!: string;
+  /** Ignored when authenticated; profile email is used from the JWT. */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @IsString()
   @IsNotEmpty()
