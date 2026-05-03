@@ -1,5 +1,5 @@
-# Deploy from the repository root (directory that contains this file + package.json).
-# In the Render dashboard: Settings → Root Directory → leave EMPTY (not "src").
+# Service root must be the folder that contains package.json (repo root), NOT "src".
+# Dashboard: Settings → Root Directory → leave empty. If you see /opt/render/project/src/ in logs, fix this.
 
 services:
   - type: web

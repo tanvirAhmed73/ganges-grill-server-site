@@ -2,14 +2,16 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import express from 'express';
 import { AppModule } from './app.module';
 
+/**
+ * Default Nest + Express (via @nestjs/platform-express). Do not pass a custom
+ * `ExpressAdapter` unless you use serverless; a raw `express()` app triggers
+ * code paths that hit Express 4’s removed `app.router` and throw.
+ */
 async function bootstrap(): Promise<void> {
-  const expressApp = express();
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
+  const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
   app.enableCors();
