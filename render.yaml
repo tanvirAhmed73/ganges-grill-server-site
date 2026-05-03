@@ -1,0 +1,13 @@
+# Deploy from the repository root (directory that contains this file + package.json).
+# In the Render dashboard: Settings → Root Directory → leave EMPTY (not "src").
+
+services:
+  - type: web
+    name: ganges-grill-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.0"
